@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest something Authforge should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation you're in, not only the solution you have in mind.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
