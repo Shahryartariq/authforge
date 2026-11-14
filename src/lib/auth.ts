@@ -17,6 +17,7 @@ import {
   verifyNewEmailTemplate,
 } from "@/lib/email/templates";
 import { EMAIL_CHANGE } from "@/lib/email-change";
+import { NAME_MAX, PASSWORD_MAX, PASSWORD_MIN } from "@/lib/limits";
 import { site } from "@/lib/site";
 
 const ONE_HOUR = 60 * 60;
@@ -52,6 +53,25 @@ const BLOCKED_WHILE_IMPERSONATING = new Set([
   "/two-factor/generate-backup-codes",
 ]);
 
+/**
+ * The forms check these as well. This is for requests sent straight to the
+ * API, which could otherwise store a megabyte-long name, or point the profile
+ * picture (shown to admins) at anything. Pictures only come from Google or GitHub.
+ */
+function assertProfileFields(body: unknown) {
+  if (!body || typeof body !== "object") return;
+  const { name, image } = body as { name?: unknown; image?: unknown };
+  if (typeof name === "string" && (name.trim().length === 0 || name.trim().length > NAME_MAX)) {
+    throw new APIError("BAD_REQUEST", { code: "INVALID_NAME", message: `Names are 1 to ${NAME_MAX} characters.` });
+  }
+  if (image !== undefined && image !== null) {
+    throw new APIError("BAD_REQUEST", {
+      code: "IMAGE_NOT_ALLOWED",
+      message: "Profile pictures come from Google or GitHub and can't be set here.",
+    });
+  }
+}
+
 const socialProviders = {
   ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
     ? {
@@ -78,8 +98,8 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: emailFeatures.verificationRequired,
-    minPasswordLength: 8,
-    maxPasswordLength: 128,
+    minPasswordLength: PASSWORD_MIN,
+    maxPasswordLength: PASSWORD_MAX,
     resetPasswordTokenExpiresIn: ONE_HOUR,
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
@@ -200,6 +220,7 @@ export const auth = betterAuth({
 
   hooks: {
     before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path === "/sign-up/email" || ctx.path === "/update-user") assertProfileFields(ctx.body);
       if (!BLOCKED_WHILE_IMPERSONATING.has(ctx.path)) return;
       const current = await getSessionFromCtx(ctx);
       if (current?.session.impersonatedBy) {

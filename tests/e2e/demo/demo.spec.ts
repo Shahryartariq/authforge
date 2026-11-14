@@ -55,6 +55,8 @@ test("security headers are set", async ({ page }) => {
   expect(headers["content-security-policy"]).toContain("frame-ancestors 'none'");
   expect(headers["x-content-type-options"]).toBe("nosniff");
   expect(headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");
+  expect(headers["cross-origin-opener-policy"]).toBe("same-origin");
+  expect(headers["x-powered-by"]).toBeUndefined();
 });
 
 test("Back after leaving through the popup doesn't reopen it", async ({ page }) => {
@@ -127,4 +129,26 @@ test("signing up twice with one address says the account exists", async ({ page,
   const other = await newPerson();
   await fillSignUp(other, "Here Second", email);
   await expect(other.getByText("An account with this email already exists")).toBeVisible();
+});
+
+test("the API refuses a profile picture or an oversized name sent around the forms", async ({ page }) => {
+  await signUpDemo(page, "Field Limits", uniqueEmail("limits"));
+  const result = await page.evaluate(async () => {
+    const update = async (body: unknown) => {
+      const res = await fetch("/api/auth/update-user", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return [res.status, ((await res.json()) as { code?: string }).code];
+    };
+    return {
+      image: await update({ image: "https://example.com/tracker.png" }),
+      longName: await update({ name: "x".repeat(81) }),
+      okName: (await update({ name: "Renamed Fine" }))[0],
+    };
+  });
+  expect(result.image).toEqual([400, "IMAGE_NOT_ALLOWED"]);
+  expect(result.longName).toEqual([400, "INVALID_NAME"]);
+  expect(result.okName).toBe(200);
 });
