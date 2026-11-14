@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/icons";
-import { site } from "@/lib/site";
+import { openGraphBase, site } from "@/lib/site";
+
+const description = `What the ${site.name} demo stores about you, and how to delete it.`;
 
 export const metadata: Metadata = {
   title: "Privacy",
-  description: `What the ${site.name} demo stores about you, and how to delete it.`,
+  description,
   alternates: { canonical: "/privacy" },
-  openGraph: { url: "/privacy" },
+  openGraph: { ...openGraphBase, title: `Privacy · ${site.name}`, description, url: "/privacy" },
+  twitter: { card: "summary_large_image", title: `Privacy · ${site.name}`, description },
 };
 
 // If you deploy Authforge for your own app, rewrite this page for it.

@@ -41,6 +41,8 @@ test("sign-in and account pages ask search engines not to index them", async ({ 
   for (const path of ["/sign-in", "/sign-up", "/forgot-password", "/two-factor"]) {
     await page.goto(path);
     await expect(page.locator('meta[name="robots"]'), path).toHaveAttribute("content", /noindex/);
+    // And they don't claim to be a copy of the home page.
+    await expect(page.locator('link[rel="canonical"]'), path).toHaveCount(0);
   }
   await page.goto("/privacy");
   await expect(page.locator('meta[name="robots"]')).toHaveCount(0);
@@ -88,4 +90,31 @@ test("the landing page loads only one web font", async ({ page }) => {
   await page.goto("/", { waitUntil: "networkidle" });
   expect(fonts).toHaveLength(1);
   expect(fonts[0]).toContain(".woff2");
+});
+
+test("the privacy page has its own canonical URL and the share image", async ({ page, baseURL }) => {
+  await page.goto("/privacy");
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute("href", `${baseURL}/privacy`);
+  await expect(page.locator('meta[property="og:url"]')).toHaveAttribute("content", `${baseURL}/privacy`);
+  await expect(page.locator('meta[property="og:title"]')).toHaveAttribute("content", /Privacy/);
+  await expect(page.locator('meta[property="og:site_name"]')).toHaveAttribute("content", "Authforge");
+  const image = await page.locator('meta[property="og:image"]').getAttribute("content");
+  expect((await page.request.get(image!)).headers()["content-type"]).toBe("image/png");
+});
+
+test("a missing page says so in its title and isn't a copy of the home page", async ({ page }) => {
+  const response = (await page.goto("/no-such-page"))!;
+  expect(response.status()).toBe(404);
+  await expect(page).toHaveTitle(/Page not found/);
+  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+});
+
+test("security.txt tells researchers where to report, and hasn't expired", async ({ request }) => {
+  const res = await request.get("/.well-known/security.txt");
+  expect(res.status()).toBe(200);
+  expect(res.headers()["content-type"]).toContain("text/plain");
+  const body = await res.text();
+  expect(body).toMatch(/^Contact: https:\/\/github\.com\/.+\/security\/advisories\/new$/m);
+  const expires = new Date(body.match(/^Expires: (.+)$/m)![1]);
+  expect(expires.getTime()).toBeGreaterThan(Date.now() + 300 * 24 * 60 * 60 * 1000);
 });
