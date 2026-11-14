@@ -62,7 +62,8 @@ export function TwoFactorSection({ enabled, hasPassword }: { enabled: boolean; h
   async function verify(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (step.kind !== "scan") return;
-    const parsed = otpSchema.safeParse(new FormData(e.currentTarget).get("code"));
+    const typed = String(new FormData(e.currentTarget).get("code") ?? "").replace(/\s/g, "");
+    const parsed = otpSchema.safeParse(typed);
     if (!parsed.success) return setError(parsed.error.issues[0].message);
     setError("");
     setPending(true);
@@ -151,7 +152,7 @@ export function TwoFactorSection({ enabled, hasPassword }: { enabled: boolean; h
                 </div>
               </div>
               <Field label="6-digit code" htmlFor="tfa-code" error={error}>
-                <Input id="tfa-code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="max-w-40 font-mono tracking-[0.3em]" autoFocus />
+                <Input id="tfa-code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={7} className="max-w-40 font-mono tracking-[0.3em]" autoFocus />
               </Field>
             </div>
           </div>

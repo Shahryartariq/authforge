@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { CreateUser } from "@/components/admin/create-user";
 import { UserSearch } from "@/components/admin/user-search";
 import { UsersTable, type AdminUserRow } from "@/components/admin/users-table";
@@ -71,6 +72,11 @@ async function Users({ searchParams }: { searchParams: PageProps<"/admin">["sear
   const page = Math.max(1, Number(params.page) || 1);
 
   const { users, total } = await listUsers({ query: q, page, pageSize: PAGE_SIZE });
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // A page past the end (an old link, or users were deleted): show the last page.
+  if (page > pageCount) {
+    redirect(`/admin?${new URLSearchParams({ ...(q ? { q } : {}), page: String(pageCount) })}`);
+  }
 
   const rows: AdminUserRow[] = users.map((u) => ({
     id: u.id,
@@ -93,7 +99,7 @@ async function Users({ searchParams }: { searchParams: PageProps<"/admin">["sear
         users={rows}
         currentUserId={me.id}
         page={page}
-        pageCount={Math.max(1, Math.ceil(total / PAGE_SIZE))}
+        pageCount={pageCount}
         total={total}
         query={q}
       />

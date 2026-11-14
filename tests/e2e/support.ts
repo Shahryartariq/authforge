@@ -3,6 +3,7 @@ import { createHmac, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
+import { Client } from "pg";
 
 export { expect };
 export type { Page };
@@ -82,6 +83,54 @@ export async function emailLink(to: string, kind: keyof typeof LINKS) {
     )
     .toBeTruthy();
   return link!;
+}
+
+/** Waits for the newest email to `to` whose subject matches, and returns its text. */
+export async function emailText(to: string, subject: RegExp) {
+  let text: string | undefined;
+  await expect
+    .poll(
+      () => {
+        if (!existsSync(OUTBOX)) return undefined;
+        text = readFileSync(OUTBOX, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line) as { to: string; subject: string; text: string })
+          .filter((e) => e.to === to && subject.test(e.subject))
+          .pop()?.text;
+        return text;
+      },
+      { message: `email "${subject.source}" for ${to}`, timeout: 15_000 },
+    )
+    .toBeTruthy();
+  return text!;
+}
+
+// ---------------------------------------------------------------- database
+
+/**
+ * Makes a user's sessions look `days` old, as if they had stayed signed in.
+ * (Some actions only work for a day after signing in.)
+ */
+export async function ageSessions(email: string, days: number) {
+  const db = new Client({ connectionString: process.env.DATABASE_URL });
+  await db.connect();
+  try {
+    // Drizzle names the columns created_at / user_id; Prisma keeps createdAt / userId.
+    const { rows } = await db.query<{ column_name: string }>(
+      "select column_name from information_schema.columns where table_name = 'session'",
+    );
+    const has = (name: string) => rows.some((r) => r.column_name === name);
+    const createdAt = has("created_at") ? "created_at" : '"createdAt"';
+    const userId = has("user_id") ? "user_id" : '"userId"';
+    await db.query(
+      `update "session" set ${createdAt} = now() - make_interval(days => $2::int)
+       where ${userId} = (select id from "user" where email = $1)`,
+      [email, days],
+    );
+  } finally {
+    await db.end();
+  }
 }
 
 // ---------------------------------------------------------------- flows

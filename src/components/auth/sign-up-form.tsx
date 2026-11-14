@@ -15,7 +15,7 @@ import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import type { EmailFeatures, EnabledProviders } from "@/lib/env";
 import { useQueryParams } from "@/lib/use-query-params";
-import { safeRedirect } from "@/lib/utils";
+import { safeRedirect, signInHref } from "@/lib/utils";
 import { fieldErrors, signUpSchema } from "@/lib/validation";
 
 export function SignUpForm({
@@ -104,7 +104,7 @@ export function SignUpForm({
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/sign-in" className="font-medium text-foreground underline-offset-4 hover:underline">
+        <Link href={signInHref(callbackURL)} className="font-medium text-foreground underline-offset-4 hover:underline">
           Sign in
         </Link>
       </p>
@@ -142,7 +142,7 @@ export function CheckInbox({ email, callbackURL = "/dashboard" }: { email: strin
         <Button variant="outline" onClick={resend} loading={state === "sending"} disabled={state === "sent"}>
           Resend email
         </Button>
-        <Link href="/sign-in" className="inline-flex h-10 items-center px-3 text-sm text-muted-foreground hover:text-foreground">
+        <Link href={signInHref(callbackURL)} className="inline-flex h-10 items-center px-3 text-sm text-muted-foreground hover:text-foreground">
           Back to sign in
         </Link>
       </div>

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { EnabledProviders } from "@/lib/env";
+import { signInHref } from "@/lib/utils";
 
 // The sign-in form (auth client, passkeys, validation) is only downloaded when
 // someone opens the popup, or starts to: hover and focus preload it. Pages that
@@ -48,8 +49,7 @@ export function SignInButton({
   const [open, setOpen] = useState(false);
 
   if (mode === "redirect") {
-    const href = callbackURL === "/dashboard" ? "/sign-in" : `/sign-in?callbackURL=${encodeURIComponent(callbackURL)}`;
-    return <Link href={href}>{children}</Link>;
+    return <Link href={signInHref(callbackURL)}>{children}</Link>;
   }
 
   return (

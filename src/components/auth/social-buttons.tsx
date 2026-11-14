@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import type { EnabledProviders } from "@/lib/env";
+import { signInHref } from "@/lib/utils";
 
 const PROVIDERS = [
   { id: "google", label: "Google", Icon: GoogleIcon },
@@ -39,7 +40,8 @@ export function SocialButtons({
     const { error } = await authClient.signIn.social({
       provider,
       callbackURL,
-      errorCallbackURL: "/sign-in",
+      // On failure, come back to sign-in with the destination intact.
+      errorCallbackURL: signInHref(callbackURL),
     });
     if (error) {
       toast.error(authErrorMessage(error));

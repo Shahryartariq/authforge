@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Ban, Eye, LogOut, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, UserCheck } from "lucide-react";
+import { Ban, Eye, KeyRound, LogOut, MoreHorizontal, ShieldCheck, ShieldOff, Trash2, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -34,11 +34,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { PasswordInput } from "@/components/auth/password-input";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { cn, initials } from "@/lib/utils";
+import { passwordSchema } from "@/lib/validation";
 
 export type AdminUserRow = {
   id: string;
@@ -168,7 +170,7 @@ export function UsersTable({ users, currentUserId, page, pageCount, total, query
 function RowActions({ user }: { user: AdminUserRow }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-  const [dialog, setDialog] = useState<"ban" | "delete" | null>(null);
+  const [dialog, setDialog] = useState<"ban" | "password" | "delete" | null>(null);
   const isAdmin = user.role.includes("admin");
 
   async function run(action: () => Promise<{ error: unknown }>, success: string, after?: () => void) {
@@ -227,6 +229,9 @@ function RowActions({ user }: { user: AdminUserRow }) {
           >
             <LogOut /> Sign out everywhere
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setDialog("password")}>
+            <KeyRound /> Set password…
+          </DropdownMenuItem>
           {!isAdmin && !user.banned && (
             <DropdownMenuItem
               onSelect={() =>
@@ -269,6 +274,22 @@ function RowActions({ user }: { user: AdminUserRow }) {
         pending={pending}
       />
 
+      <SetPasswordDialog
+        user={user}
+        open={dialog === "password"}
+        onOpenChange={(o) => setDialog(o ? "password" : null)}
+        onConfirm={async (newPassword) => {
+          const done = await run(async () => {
+            const set = await authClient.admin.setUserPassword({ userId: user.id, newPassword });
+            if (set.error) return set;
+            // The old password may be known to someone else: end every session.
+            return authClient.admin.revokeUserSessions({ userId: user.id });
+          }, `New password set for ${user.email}. They were signed out everywhere.`);
+          if (done) setDialog(null);
+        }}
+        pending={pending}
+      />
+
       <AlertDialog open={dialog === "delete"} onOpenChange={(o) => setDialog(o ? "delete" : null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -289,6 +310,75 @@ function RowActions({ user }: { user: AdminUserRow }) {
         </AlertDialogContent>
       </AlertDialog>
     </>
+  );
+}
+
+/** For someone who is locked out and can't use a reset link (no email provider, lost inbox). */
+function SetPasswordDialog({
+  user,
+  open,
+  onOpenChange,
+  onConfirm,
+  pending,
+}: {
+  user: AdminUserRow;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (newPassword: string) => void;
+  pending: boolean;
+}) {
+  const [error, setError] = useState("");
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        onOpenChange(o);
+        if (!o) setError("");
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <form
+          className="grid gap-4"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            const parsed = passwordSchema.safeParse(new FormData(e.currentTarget).get("password"));
+            if (!parsed.success) return setError(parsed.error.issues[0].message);
+            setError("");
+            onConfirm(parsed.data);
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Set a password for {user.email}</DialogTitle>
+            <DialogDescription>
+              Replaces their current password and signs them out everywhere. Share the new one securely and ask them
+              to change it in Settings.
+            </DialogDescription>
+          </DialogHeader>
+          <Field label="New password" htmlFor="set-password" error={error}>
+            <PasswordInput
+              id="set-password"
+              name="password"
+              autoComplete="new-password"
+              showStrength
+              autoFocus
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? "set-password-error" : undefined}
+            />
+          </Field>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button type="submit" loading={pending}>
+              Set password
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 
