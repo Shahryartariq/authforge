@@ -1,20 +1,56 @@
 import { betterAuth } from "better-auth";
+import { APIError, createAuthMiddleware, getSessionFromCtx, isAPIError } from "better-auth/api";
 import { nextCookies } from "better-auth/next-js";
 import { admin, haveIBeenPwned, lastLoginMethod, twoFactor } from "better-auth/plugins";
 import { passkey } from "@better-auth/passkey";
 import { authAdapter } from "@/db/adapter";
 import { isListedAdmin } from "@/lib/admin-emails";
-import { baseURL, emailFeatures, env } from "@/lib/env";
+import { baseURL, emailFeatures, env, trustedOrigins } from "@/lib/env";
 import { sendEmail } from "@/lib/email/send";
 import {
+  confirmEmailChangeTemplate,
   deleteAccountTemplate,
+  existingAccountTemplate,
+  passwordChangedTemplate,
   resetPasswordTemplate,
   verifyEmailTemplate,
+  verifyNewEmailTemplate,
 } from "@/lib/email/templates";
+import { EMAIL_CHANGE } from "@/lib/email-change";
 import { site } from "@/lib/site";
 
 const ONE_HOUR = 60 * 60;
 const ONE_DAY = 24 * ONE_HOUR;
+
+/** Tells the owner their password changed, in case it wasn't them. */
+async function notifyPasswordChanged(user: { name: string; email: string }) {
+  if (!emailFeatures.delivery) return;
+  const mail = passwordChangedTemplate(user.name, `${baseURL}/forgot-password`);
+  await sendEmail({ to: user.email, ...mail });
+}
+
+/**
+ * While an admin is impersonating someone, the account's sign-in methods are
+ * read-only. Impersonation is for seeing what a user sees, and an admin who
+ * could add a passkey or link a GitHub account would keep a way in afterwards.
+ */
+const BLOCKED_WHILE_IMPERSONATING = new Set([
+  "/change-password",
+  "/change-email",
+  "/delete-user",
+  "/link-social",
+  "/unlink-account",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+  "/passkey/generate-register-options",
+  "/passkey/verify-registration",
+  "/passkey/update-passkey",
+  "/passkey/delete-passkey",
+  "/two-factor/enable",
+  "/two-factor/disable",
+  "/two-factor/generate-backup-codes",
+]);
 
 const socialProviders = {
   ...(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET
@@ -35,7 +71,7 @@ export const auth = betterAuth({
   appName: site.name,
   baseURL,
   secret: env.BETTER_AUTH_SECRET,
-  trustedOrigins: [baseURL],
+  trustedOrigins,
 
   database: authAdapter,
 
@@ -50,6 +86,14 @@ export const auth = betterAuth({
       const mail = resetPasswordTemplate(user.name, url);
       await sendEmail({ to: user.email, ...mail });
     },
+    onPasswordReset: async ({ user }) => notifyPasswordChanged(user),
+    // Signing up with an address that already has an account looks the same
+    // on screen (so the form can't be used to find accounts). The owner gets
+    // an email instead of a verification link that would never come.
+    onExistingUserSignUp: async ({ user }) => {
+      const mail = existingAccountTemplate(user.name, `${baseURL}/sign-in`);
+      await sendEmail({ to: user.email, ...mail });
+    },
   },
 
   emailVerification: {
@@ -59,6 +103,15 @@ export const auth = betterAuth({
     autoSignInAfterVerification: true,
     expiresIn: ONE_HOUR,
     sendVerificationEmail: async ({ user, url }) => {
+      // Demo mode with no email provider: nothing to verify, nothing to send.
+      if (!emailFeatures.delivery && !emailFeatures.verificationRequired) return;
+      // The last step of an email change also arrives here, addressed to the
+      // new email. Its link lands on the "your email was changed" notice.
+      if (url.includes(EMAIL_CHANGE.approvedParam)) {
+        const mail = verifyNewEmailTemplate(user.name, url.replace(EMAIL_CHANGE.approvedParam, EMAIL_CHANGE.doneParam));
+        await sendEmail({ to: user.email, ...mail });
+        return;
+      }
       const mail = verifyEmailTemplate(user.name, url);
       await sendEmail({ to: user.email, ...mail });
     },
@@ -75,6 +128,17 @@ export const auth = betterAuth({
   },
 
   user: {
+    changeEmail: {
+      enabled: true,
+      // A verified user's current address approves the change first, then the
+      // new address confirms it. Nothing changes until both links are opened.
+      sendChangeEmailConfirmation: async ({ user, newEmail, url }) => {
+        const mail = confirmEmailChangeTemplate(user.name, newEmail, url);
+        await sendEmail({ to: user.email, ...mail });
+      },
+      // Demo mode: an address nobody verified can be changed directly.
+      updateEmailWithoutVerification: !emailFeatures.verificationRequired,
+    },
     deleteUser: {
       enabled: true,
       // Confirm by email when email works; otherwise the password (or a
@@ -112,6 +176,12 @@ export const auth = betterAuth({
       "/send-verification-email": { window: 5 * 60, max: 3 },
       "/two-factor/*": { window: 60, max: 5 },
       "/passkey/*": { window: 60, max: 10 },
+      // These take the current password, so they'd let someone holding a
+      // session guess it. Same limit as sign-in.
+      "/change-password": { window: 60, max: 5 },
+      "/delete-user": { window: 60, max: 5 },
+      "/verify-password": { window: 60, max: 5 },
+      "/change-email": { window: 5 * 60, max: 3 },
     },
   },
 
@@ -128,12 +198,36 @@ export const auth = betterAuth({
     },
   },
 
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (!BLOCKED_WHILE_IMPERSONATING.has(ctx.path)) return;
+      const current = await getSessionFromCtx(ctx);
+      if (current?.session.impersonatedBy) {
+        throw new APIError("FORBIDDEN", {
+          code: "NOT_WHILE_IMPERSONATING",
+          message: "Sign-in settings can't be changed while impersonating.",
+        });
+      }
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/change-password" || isAPIError(ctx.context.returned)) return;
+      // "Sign out other devices" replaces the session, so look at the new one first.
+      const user = ctx.context.newSession?.user ?? (await getSessionFromCtx(ctx))?.user;
+      if (user) await notifyPasswordChanged(user);
+    }),
+  },
+
   advanced: {
     useSecureCookies: env.NODE_ENV === "production",
     database: { generateId: "uuid" },
   },
 
   telemetry: { enabled: false },
+
+  // When a Google or GitHub sign-in can't even be matched to a request (an
+  // expired or replayed link), land on our sign-in page with the error, not on
+  // the library's built-in error page.
+  onAPIError: { errorURL: `${baseURL}/sign-in` },
 
   plugins: [
     twoFactor({

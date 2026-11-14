@@ -71,14 +71,33 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 
-/** Production base URL, falling back to Vercel's system variables. */
+const onVercelPreview = process.env.VERCEL_ENV === "preview";
+const vercelHost = (name: string) => (process.env[name] ? `https://${process.env[name]}` : undefined);
+
+/**
+ * The app's public URL: BETTER_AUTH_URL when set, otherwise Vercel's own
+ * variables. A preview deployment uses its branch URL, so links in emails and
+ * Google/GitHub callbacks stay on the preview. Production uses the production domain.
+ */
 export const baseURL =
   env.BETTER_AUTH_URL ??
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : "http://localhost:3000");
+  (onVercelPreview
+    ? (vercelHost("VERCEL_BRANCH_URL") ?? vercelHost("VERCEL_URL"))
+    : (vercelHost("VERCEL_PROJECT_PRODUCTION_URL") ?? vercelHost("VERCEL_URL"))) ??
+  "http://localhost:3000";
+
+/**
+ * Origins allowed to call the auth API. A Vercel preview answers on two
+ * hostnames (per branch and per deployment). Both are this project's own, and
+ * without them every sign-in on a preview is refused as a foreign origin.
+ */
+export const trustedOrigins = [
+  ...new Set(
+    [baseURL, ...(onVercelPreview ? [vercelHost("VERCEL_BRANCH_URL"), vercelHost("VERCEL_URL")] : [])].filter(
+      (origin): origin is string => Boolean(origin),
+    ),
+  ),
+];
 
 export const providers = {
   google: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
