@@ -3,7 +3,6 @@ import { createHmac, randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { test as base, expect, type Page } from "@playwright/test";
-import { Client } from "pg";
 
 export { expect };
 export type { Page };
@@ -106,33 +105,6 @@ export async function emailText(to: string, subject: RegExp) {
   return text!;
 }
 
-// ---------------------------------------------------------------- database
-
-/**
- * Makes a user's sessions look `days` old, as if they had stayed signed in.
- * (Some actions only work for a day after signing in.)
- */
-export async function ageSessions(email: string, days: number) {
-  const db = new Client({ connectionString: process.env.DATABASE_URL });
-  await db.connect();
-  try {
-    // Drizzle names the columns created_at / user_id; Prisma keeps createdAt / userId.
-    const { rows } = await db.query<{ column_name: string }>(
-      "select column_name from information_schema.columns where table_name = 'session'",
-    );
-    const has = (name: string) => rows.some((r) => r.column_name === name);
-    const createdAt = has("created_at") ? "created_at" : '"createdAt"';
-    const userId = has("user_id") ? "user_id" : '"userId"';
-    await db.query(
-      `update "session" set ${createdAt} = now() - make_interval(days => $2::int)
-       where ${userId} = (select id from "user" where email = $1)`,
-      [email, days],
-    );
-  } finally {
-    await db.end();
-  }
-}
-
 // ---------------------------------------------------------------- flows
 
 export async function fillSignUp(page: Page, name: string, email: string, password = PASSWORD) {
@@ -181,6 +153,17 @@ export async function sessionStatus(page: Page) {
 /** Gives a user the admin role with the project's own script. */
 export function promoteToAdmin(email: string) {
   execFileSync("pnpm", ["exec", "tsx", "scripts/promote-admin.ts", email], {
+    stdio: "pipe",
+    shell: process.platform === "win32",
+  });
+}
+
+/**
+ * Makes a user's sessions look `days` old, as if they had stayed signed in.
+ * (Some actions only work for a day after signing in.)
+ */
+export function ageSessions(email: string, days: number) {
+  execFileSync("pnpm", ["exec", "tsx", "tests/e2e/age-sessions.ts", email, String(days)], {
     stdio: "pipe",
     shell: process.platform === "win32",
   });

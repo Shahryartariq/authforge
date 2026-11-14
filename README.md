@@ -258,7 +258,7 @@ The browser tests build the app twice and run against both builds:
 
 Emails go to `.e2e/outbox.jsonl` (set by `EMAIL_OUTBOX_FILE`), so tests follow real links. Each test signs up its own users, so they run in parallel on a database that already has data. Run them locally with `pnpm exec playwright install chromium` once, then `pnpm test:e2e`.
 
-CI also runs lint, types, unit tests, migrations, a schema drift check, a production build and the smoke test twice: once with Drizzle and once with Prisma. A dependency audit, a review of newly added packages and CodeQL run on every pull request.
+CI also runs lint, types, unit tests, migrations, a schema drift check, a production build and the smoke test twice: once with Drizzle and once with Prisma. A dependency audit and CodeQL run on every pull request.
 
 ## Security
 

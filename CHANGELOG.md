@@ -41,7 +41,7 @@ Two audits of the live site and the code: flows, SEO, performance, CI and securi
 - Lighthouse mobile, 1.0.0 → 1.1.0: home 78 → 99, privacy 92 → 97, sign-in 85 → 94, sign-up 90 → 98.
 
 ### CI
-- CodeQL on every pull request and weekly; a check on newly added dependencies; a dependency audit.
+- CodeQL on every pull request and weekly; a dependency audit that covers build tools too.
 - Actions pinned to commits, a read-only token, timeouts, cached Playwright browsers, Dependabot.
 - 65 browser tests (was 33) and 41 unit tests (was 33).
 
