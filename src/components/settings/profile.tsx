@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
+import { NAME_MAX } from "@/lib/limits";
 import { toastAuthError } from "@/lib/toast-auth-error";
 
 export function ProfileForm({ name }: { name: string }) {
@@ -20,7 +21,7 @@ export function ProfileForm({ name }: { name: string }) {
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!trimmed) return setError("Enter your name");
-    if (trimmed.length > 80) return setError("Keep it under 80 characters");
+    if (trimmed.length > NAME_MAX) return setError(`Keep it under ${NAME_MAX} characters`);
     setError("");
     setPending(true);
     const res = await authClient.updateUser({ name: trimmed });

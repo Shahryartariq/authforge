@@ -20,15 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
-import { emailSchema, fieldErrors, passwordSchema } from "@/lib/validation";
-import { z } from "@/lib/zod";
-
-const schema = z.object({
-  name: z.string().trim().min(1, "Enter a name"),
-  email: emailSchema,
-  password: passwordSchema,
-  role: z.enum(["user", "admin"]),
-});
+import { createUserSchema, fieldErrors } from "@/lib/validation";
 
 export function CreateUser() {
   const router = useRouter();
@@ -38,7 +30,7 @@ export function CreateUser() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const parsed = schema.safeParse(Object.fromEntries(new FormData(e.currentTarget)));
+    const parsed = createUserSchema.safeParse(Object.fromEntries(new FormData(e.currentTarget)));
     if (!parsed.success) return setErrors(fieldErrors(parsed.error));
     setErrors({});
     setPending(true);

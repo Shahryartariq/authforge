@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import QRCode from "react-qr-code";
+import dynamic from "next/dynamic";
 import { Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/password-input";
@@ -16,6 +16,12 @@ import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { site } from "@/lib/site";
 import { otpSchema } from "@/lib/validation";
+
+// Only needed while setting up 2FA, so it isn't part of every Settings visit.
+const QRCode = dynamic(() => import("react-qr-code"), {
+  ssr: false,
+  loading: () => <div className="size-[164px] animate-pulse rounded bg-neutral-200" aria-label="Loading QR code" />,
+});
 
 type Step =
   | { kind: "idle" }
