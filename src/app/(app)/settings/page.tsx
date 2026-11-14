@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { headers } from "next/headers";
 import { ConnectedAccounts } from "@/components/settings/connected-accounts";
 import { DeleteAccount } from "@/components/settings/delete-account";
+import { EmailSection } from "@/components/settings/email";
 import { PasskeysSection } from "@/components/settings/passkeys";
 import { PasswordSection } from "@/components/settings/password";
 import { ProfileForm } from "@/components/settings/profile";
@@ -32,16 +33,28 @@ export default function SettingsPage() {
 async function Settings() {
   const { user, session } = await requireSession("/settings");
   const h = await headers();
+  const { internalAdapter } = await auth.$context;
   const [accounts, sessions, passkeys] = await Promise.all([
     auth.api.listUserAccounts({ headers: h }),
-    auth.api.listSessions({ headers: h }),
+    // Read straight from the database, not through `auth.api.listSessions`:
+    // that endpoint refuses sessions older than a day, which would break this
+    // page for anyone who stays signed in. Tokens never leave the server.
+    internalAdapter.listSessions(user.id),
     auth.api.listPasskeys({ headers: h }),
   ]);
   const hasPassword = accounts.some((a) => a.providerId === "credential");
+  // How this account can change its email (see `user.changeEmail` in auth.ts).
+  const emailChange =
+    !user.emailVerified && !emailFeatures.verificationRequired
+      ? "instant"
+      : emailFeatures.delivery
+        ? "confirm"
+        : "off";
 
   return (
     <div className="flex flex-col gap-6">
-      <ProfileForm name={user.name} email={user.email} />
+      <ProfileForm name={user.name} />
+      <EmailSection email={user.email} mode={emailChange} />
       <div id="security" className="flex scroll-mt-20 flex-col gap-6">
         <PasswordSection hasPassword={hasPassword} email={user.email} emailDelivery={emailFeatures.delivery} />
         <TwoFactorSection enabled={Boolean(user.twoFactorEnabled)} hasPassword={hasPassword} />
@@ -63,7 +76,6 @@ async function Settings() {
         currentId={session.id}
         sessions={sessions.map((s) => ({
           id: s.id,
-          token: s.token,
           userAgent: s.userAgent ?? null,
           ipAddress: s.ipAddress ?? null,
           createdAt: new Date(s.createdAt).toISOString(),

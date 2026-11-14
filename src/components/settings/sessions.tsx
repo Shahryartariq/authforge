@@ -4,16 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Laptop, Smartphone } from "lucide-react";
 import { toast } from "sonner";
+import { revokeSessionById } from "@/app/(app)/settings/actions";
 import { Section } from "@/components/settings/section";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "@/lib/auth-errors";
+import { toastAuthError } from "@/lib/toast-auth-error";
 import { describeUserAgent } from "@/lib/user-agent";
 
 type SessionRow = {
   id: string;
-  token: string;
   userAgent: string | null;
   ipAddress: string | null;
   createdAt: string;
@@ -26,11 +26,11 @@ export function SessionsSection({ sessions, currentId }: { sessions: SessionRow[
   const others = sessions.filter((s) => s.id !== currentId);
   const sorted = [...sessions].sort((a, b) => (a.id === currentId ? -1 : b.id === currentId ? 1 : b.updatedAt.localeCompare(a.updatedAt)));
 
-  async function revoke(token: string, id: string) {
+  async function revoke(id: string) {
     setPending(id);
-    const res = await authClient.revokeSession({ token });
+    const res = await revokeSessionById(id);
     setPending(null);
-    if (res.error) return toast.error(authErrorMessage(res.error));
+    if (!res.ok) return toastAuthError({ code: res.code });
     toast.success("Session signed out");
     router.refresh();
   }
@@ -39,7 +39,7 @@ export function SessionsSection({ sessions, currentId }: { sessions: SessionRow[
     setPending("others");
     const res = await authClient.revokeOtherSessions();
     setPending(null);
-    if (res.error) return toast.error(authErrorMessage(res.error));
+    if (res.error) return toastAuthError(res.error);
     toast.success("Signed out of all other sessions");
     router.refresh();
   }
@@ -76,7 +76,7 @@ export function SessionsSection({ sessions, currentId }: { sessions: SessionRow[
               {current ? (
                 <Badge variant="brand">This device</Badge>
               ) : (
-                <Button size="sm" variant="ghost" onClick={() => revoke(s.token, s.id)} loading={pending === s.id}>
+                <Button size="sm" variant="ghost" onClick={() => revoke(s.id)} loading={pending === s.id}>
                   Sign out
                 </Button>
               )}
