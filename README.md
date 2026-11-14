@@ -11,6 +11,7 @@ Email and password · Google and GitHub · Two-factor · Passkeys · Roles and a
 [Live demo](https://getauthforge.vercel.app) · [Quick start](#quick-start) · [Deploy](#deploy-to-vercel) · [How it works](#how-it-works)
 
 [![CI](https://github.com/Shahryartariq/authforge/actions/workflows/ci.yml/badge.svg)](https://github.com/Shahryartariq/authforge/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Shahryartariq/authforge/actions/workflows/codeql.yml/badge.svg)](https://github.com/Shahryartariq/authforge/actions/workflows/codeql.yml)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-black)
 ![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6)
 ![License: MIT](https://img.shields.io/badge/license-MIT-green)
@@ -31,11 +32,12 @@ Every new app needs the same auth work: sign-up with email verification, passwor
 | **Google and GitHub** | One-click sign-in that shows up automatically when you add credentials. Accounts link safely when the email matches, and a "Last used" hint appears on the sign-in page |
 | **Two-factor (TOTP)** | QR setup for any authenticator app, 10 single-use backup codes, a 30-day trusted-device option and a lockout after repeated wrong codes |
 | **Passkeys** | Face ID, Touch ID, Windows Hello and security keys, including passkey autofill in the browser's email field |
-| **Roles and admin panel** | Search users, promote or demote admins, ban temporarily or permanently, sign a user out everywhere, impersonate to debug, create and delete users |
+| **Roles and admin panel** | Search users, promote or demote admins, ban temporarily or permanently, sign a user out everywhere, set a password for someone who is locked out, impersonate to debug (sign-in settings stay read-only while you do), create and delete users |
 | **Sign in in a popup** | `SignInButton` opens the full sign-in form (password, passkey, Google/GitHub, 2FA) in a dialog, so people sign in without leaving the page. The landing page uses it; `/sign-in` still works as a full page |
 | **Drizzle or Prisma** | Pick your ORM when you set up: `pnpm env:setup` asks, then removes the other one's files, so your project only has one. CI tests both |
-| **Account settings** | Change name and password, manage 2FA and passkeys, connect or disconnect Google and GitHub, see and revoke active sessions, delete the account after an email confirmation |
-| **Security defaults** | Rate limits stored in Postgres (so they hold across serverless instances), secure HTTP-only cookies, CSRF protection, open-redirect guards, a strict CSP and security headers, and env validation at startup |
+| **Account settings** | Change name, email (approved from the old address, confirmed from the new one) and password, manage 2FA and passkeys, connect or disconnect Google and GitHub, see and revoke active sessions, delete the account after an email confirmation |
+| **Emails that keep owners informed** | A notice when the password changes, a heads-up when someone tries to sign up with an address that already has an account, and approval links for email changes |
+| **Security defaults** | Rate limits stored in Postgres (so they hold across serverless instances), secure HTTP-only cookies, CSRF protection, open-redirect guards, a Content Security Policy and security headers, a fresh sign-in for sensitive actions, and env validation at startup. See [SECURITY.md](SECURITY.md) |
 
 ## Screenshots
 
@@ -80,9 +82,9 @@ Open http://localhost:3000 and sign up. Without `RESEND_API_KEY`, the verificati
 | --- | --- | --- |
 | `DATABASE_URL` | Yes | Postgres connection string |
 | `BETTER_AUTH_SECRET` | Yes | 32+ random characters (`openssl rand -base64 32`). Signs sessions and tokens |
-| `BETTER_AUTH_URL` | Production | Public URL of the app. On Vercel it falls back to the production domain |
+| `BETTER_AUTH_URL` | Production | Public URL of the app. On Vercel it falls back to the production domain, and on a preview deployment to that preview's own URL. If you set it yourself, set it for Production only |
 | `ADMIN_EMAILS` | No | Comma-separated emails that get the admin role when they sign up |
-| `RESEND_API_KEY` / `EMAIL_FROM` | Production | Sends verification, reset and delete emails |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Production | Sends verification, reset, email-change, delete and security-notice emails |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | No | Turns on Google sign-in |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | No | Turns on GitHub sign-in |
 | `PWNED_PASSWORD_CHECK` | No | `true` by default. Set it to `false` only offline |
@@ -98,6 +100,8 @@ The [live demo](https://getauthforge.vercel.app) runs with `REQUIRE_EMAIL_VERIFI
 - `ADMIN_EMAILS` only applies to Google or GitHub sign-ups (where the provider has verified the email), so nobody can claim admin by typing the admin's address.
 - Password reset links can't be sent, and the reset page says so.
 - Deleting an account happens immediately after the password check, instead of waiting for an email confirmation.
+- An email change applies right away (nobody has verified the old address either).
+- A user who forgets their password needs an admin: **Admin → Set password…**
 
 Keep verification on for a real app.
 
@@ -193,6 +197,9 @@ Browser ──► src/proxy.ts ──────────► fast cookie che
 - **Cache Components.** Pages that read the session stream in behind `<Suspense>`, so the static shell (header, layout, skeletons) loads at once.
 - **Sessions** last 7 days and refresh daily. Every request checks the session in the database (no cookie cache), so signing out other devices, changing a password or banning a user takes effect immediately.
 - **Email verification** is required before password sign-in. Signing in unverified sends a fresh link. Clicking it verifies the email and signs the user in.
+- **Sensitive actions need a recent sign-in.** Adding a passkey, disconnecting Google or GitHub, and deleting an account without a password only work within a day of signing in. After that the app says so and offers "Sign in again", then brings you back.
+- **A session that ended elsewhere** (signed out from another device, banned, expired) sends the next action to sign-in and back, instead of failing with an error.
+- **Session tokens stay on the server.** Settings lists your devices by session id, and signing one out goes through a Server Action that looks the token up itself.
 
 ## Project structure
 
@@ -209,6 +216,7 @@ src/
 │   ├── auth.ts          server auth config: the one file to tweak
 │   ├── auth-client.ts   browser client
 │   ├── session.ts       requireSession / requireAdmin
+│   ├── validation.ts    form rules (zod/mini, kept small for the browser)
 │   ├── env.ts           validated environment
 │   └── email/           Resend sender and email templates
 └── proxy.ts             optimistic route protection
@@ -240,17 +248,21 @@ Three layers, all in CI:
 | Command | What it checks |
 | --- | --- |
 | `pnpm test` | Unit tests: validation, redirect safety, error messages, the admin-email rule, user-agent parsing |
-| `pnpm test:e2e` | 33 Playwright tests in a real browser against Postgres ([`tests/e2e`](tests/e2e)) |
+| `pnpm test:e2e` | 65 Playwright tests in a real browser against Postgres ([`tests/e2e`](tests/e2e)) |
 | `pnpm test:smoke` | A quick sign-up, sign-in and admin check against any running server |
 
 The browser tests build the app twice and run against both builds:
 
-- **Verification on**, like a real app: sign-up and the emailed link, blocked unverified sign-in, password reset, delete-by-email, profile and password changes, other devices signed out, TOTP 2FA with trusted devices and one-time backup codes, passkeys (with a virtual authenticator), the sign-in popup, Google and GitHub redirects, and the admin panel (search, roles, 7-day ban that ends open sessions at once, impersonation, create and delete).
-- **Demo mode**, like the live site: instant sign-up, immediate account deletion, rate limiting (the sixth sign-in attempt in a minute gets a 429) and security headers.
+- **Verification on**, like a real app: sign-up and the emailed link, blocked unverified sign-in, password reset, delete-by-email, profile and password changes, the two-link email change, other devices signed out, a session that is days old, a session ended from another device, the emails owners get, TOTP 2FA with trusted devices and one-time backup codes, passkeys (with a virtual authenticator), the sign-in popup, Google and GitHub redirects, and the admin panel (search, roles, 7-day ban that ends open sessions at once, impersonation and its limits, set password, create and delete).
+- **Demo mode**, like the live site: instant sign-up, immediate account deletion and email change, rate limiting (the sixth sign-in attempt or password guess in a minute gets a 429), redirect safety, security headers, and the SEO basics (robots, sitemap, canonical URLs, share image, structured data).
 
 Emails go to `.e2e/outbox.jsonl` (set by `EMAIL_OUTBOX_FILE`), so tests follow real links. Each test signs up its own users, so they run in parallel on a database that already has data. Run them locally with `pnpm exec playwright install chromium` once, then `pnpm test:e2e`.
 
-CI also runs lint, types, unit tests, migrations, a schema drift check, a production build and the smoke test twice: once with Drizzle and once with Prisma.
+CI also runs lint, types, unit tests, migrations, a schema drift check, a production build and the smoke test twice: once with Drizzle and once with Prisma. A dependency audit, a review of newly added packages and CodeQL run on every pull request.
+
+## Security
+
+How to report a vulnerability, what the project does to stay secure, and the trade-offs it makes are in [SECURITY.md](SECURITY.md). To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Changelog
 
