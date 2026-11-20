@@ -26,7 +26,7 @@ test.describe("signed-out visitors", () => {
   });
 
   test("an external callbackURL is ignored", async ({ page }) => {
-    for (const target of ["https://evil.example", "//evil.example"]) {
+    for (const target of ["https://evil.example", "//evil.example", "/\t/evil.example", "/\\evil.example"]) {
       await page.goto(`/sign-in?callbackURL=${encodeURIComponent(target)}`);
       await expect(page.getByRole("link", { name: "Create an account" })).toHaveAttribute("href", "/sign-up");
     }
@@ -174,6 +174,8 @@ test.describe("account settings", () => {
     await expect(page.getByText("We emailed you a confirmation link")).toBeVisible();
 
     await page.goto(await emailLink(email, "delete"));
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByText("Your account was deleted.")).toBeVisible();
     await signIn(page, email);
     await expect(page.getByText("don't match")).toBeVisible();
   });

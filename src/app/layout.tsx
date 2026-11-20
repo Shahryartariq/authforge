@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { Providers } from "@/components/providers";
 import { baseURL } from "@/lib/env";
-import { site } from "@/lib/site";
+import { openGraphBase, site } from "@/lib/site";
 import "./globals.css";
 
 // Geist, cut down to Latin (33 KB instead of 70 KB). See src/app/fonts/OFL.txt.
@@ -21,15 +21,10 @@ export const metadata: Metadata = {
   description: site.description,
   applicationName: site.name,
   authors: [{ name: site.author, url: site.authorUrl }],
-  alternates: { canonical: "/" },
-  openGraph: {
-    type: "website",
-    siteName: site.name,
-    title: site.title,
-    description: site.description,
-    url: "/",
-    locale: "en_US",
-  },
+  // No canonical URL here: it would be inherited by the sign-in pages and the
+  // 404 page, telling search engines they are copies of the home page. Each
+  // indexable page (home, privacy) sets its own.
+  openGraph: { ...openGraphBase, title: site.title, description: site.description },
   twitter: { card: "summary_large_image", title: site.title, description: site.description },
 };
 

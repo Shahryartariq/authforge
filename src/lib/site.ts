@@ -10,5 +10,17 @@ export const site = {
   authorUrl: "https://github.com/Shahryartariq",
 } as const;
 
+/**
+ * Open Graph fields every public page shares. A page that sets its own
+ * `openGraph` replaces the whole object, so spread this in to keep the site
+ * name and the share image.
+ */
+export const openGraphBase = {
+  type: "website" as const,
+  siteName: site.name,
+  locale: "en_US",
+  images: [{ url: "/opengraph-image", width: 1200, height: 630, alt: `${site.name}: authentication starter for Next.js` }],
+};
+
 /** Where users land after signing in. */
 export const AFTER_SIGN_IN = "/dashboard";

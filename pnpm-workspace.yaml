@@ -1,3 +1,12 @@
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver
+
+# Two build-time tools pin old copies of packages with known advisories.
+# Neither runs on the live site; these move them to the fixed versions so
+# `pnpm audit` is clean. Remove an entry when its parent package catches up.
+overrides:
+  # drizzle-kit's bundled loader (GHSA-67mh-4wv8-2f99, dev server only)
+  "@esbuild-kit/core-utils>esbuild": "^0.25.0"
+  # ESLint's TypeScript parser (GHSA-g3hv-75wg-m249)
+  "@typescript-eslint/typescript-estree>minimatch": "^11.0.1"

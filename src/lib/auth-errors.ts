@@ -1,4 +1,4 @@
-type AuthError = { code?: string; message?: string; status?: number } | null | undefined;
+export type AuthError = { code?: string; message?: string; status?: number } | null | undefined;
 
 const MESSAGES: Record<string, string> = {
   INVALID_EMAIL_OR_PASSWORD: "That email and password don't match.",
@@ -15,6 +15,12 @@ const MESSAGES: Record<string, string> = {
   TOO_MANY_ATTEMPTS: "Too many attempts. Please try again later.",
   INVALID_TOKEN: "This link is invalid or has expired. Request a new one.",
   SESSION_EXPIRED: "For security, please sign in again to do this.",
+  SESSION_NOT_FRESH: "For security, please sign in again to do this.",
+  UNAUTHORIZED: "Your session ended. Please sign in again.",
+  NOT_WHILE_IMPERSONATING: "Sign-in settings can't be changed while impersonating.",
+  CHANGE_EMAIL_DISABLED: "Changing your email isn't available on this deployment.",
+  AUTHENTICATION_FAILED: "That passkey didn't work. Please try again.",
+  YOU_CANNOT_IMPERSONATE_ADMINS: "Admins can't be impersonated.",
   FAILED_TO_UNLINK_LAST_ACCOUNT: "You can't remove your only sign-in method.",
   CHALLENGE_NOT_FOUND: "Your passkey sign-in timed out. Please try again.",
 };
@@ -39,12 +45,20 @@ const OAUTH_MESSAGES: Record<string, string> = {
   email_not_verified: "That account's email isn't verified with the provider yet. Verify it there, then try again.",
   email_does_not_match: "That account uses a different email address than yours.",
   account_already_linked_to_different_user: "That account is already connected to a different user.",
+  unable_to_link_account: "That account couldn't be connected. Its email has to match yours.",
+  access_denied: "You cancelled at the provider, so nothing changed.",
+  state_mismatch: "That sign-in took too long or was opened in another browser. Please try again.",
+  state_not_found: "That sign-in took too long or was opened in another browser. Please try again.",
+  please_restart_the_process: "That sign-in took too long or was opened in another browser. Please try again.",
   BANNED_USER: MESSAGES.BANNED_USER,
   signup_disabled: "Sign-up is closed. Ask an admin for an account.",
 };
 
-/** Message for an `?error=` code on /sign-in, or "" when there is none. */
-export function oauthErrorMessage(code: string | null | undefined) {
+/**
+ * Message for an `?error=` code from Google or GitHub, or "" when there is none.
+ * `fallback` is used for codes this app doesn't have its own words for.
+ */
+export function oauthErrorMessage(code: string | null | undefined, fallback = "Sign-in failed. Please try again.") {
   if (!code) return "";
-  return OAUTH_MESSAGES[code] ?? "Sign-in failed. Please try again.";
+  return OAUTH_MESSAGES[code] ?? fallback;
 }

@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.1.0 (unreleased)
+
+Two audits of the live site and the code: flows, SEO, performance, CI and security.
+
+### Fixed
+- **Settings stopped loading after a day signed in.** The sessions list came from an endpoint that only answers sessions less than a day old, so the page failed from day 2 to day 7 of every session.
+- **Open redirect.** A `callbackURL` like `/<tab>/example.com` passed the redirect guard, because browsers drop tabs and newlines from URLs. After a demo-mode sign-up, after 2FA, and from the "Email verified" page, a crafted link could send someone to another site.
+- Signing up with an address that already had an account showed "Check your inbox" and sent nothing. The owner now gets an email saying so.
+- `/verify-email` said "Email verified, you're signed in" to anyone who opened it.
+- A session ended from another device made the next action fail with "Unauthorized". It now goes to sign-in and back.
+- A refused Google or GitHub link landed on the auth library's built-in error page.
+- Links between sign-in, sign-up and 2FA dropped the page you were going to.
+- An admin page number past the end showed an empty list.
+- Sign-in didn't work on Vercel preview deployments (the preview's own address wasn't trusted).
+- A console error on every page: the Content Security Policy blocked a zod probe.
+- Clicking "Sign in with a passkey" right after a page loaded could fail with a challenge mismatch.
+
+### Added
+- **Change your email**: the current address approves, the new address confirms. In demo mode it applies at once.
+- **Emails for the owner**: a notice when the password changes or is reset, and a heads-up when someone tries to sign up with their address.
+- **Admin → Set password…** for a user who is locked out; it signs them out everywhere.
+- Error pages for a page that fails to load, with a retry.
+- "Sign in again" on actions that need a recent sign-in (add a passkey, disconnect an account).
+- robots.txt, sitemap.xml, canonical URLs, a share image, structured data, favicon, Apple icon and web manifest. Sign-in and account pages are `noindex`.
+- `SECURITY.md`, `/.well-known/security.txt`, `CONTRIBUTING.md`, issue and pull request templates.
+
+### Security
+- While impersonating, an admin can't add a passkey, link an account, change the email, delete the account or sign out sessions.
+- Session tokens are no longer sent to the Settings page; signing a device out goes by session id.
+- Requests that take the current password (change password, delete account) are rate limited like sign-in.
+- The API refuses a profile picture URL or an oversized name sent around the forms.
+- `Cross-Origin-Opener-Policy: same-origin`; a tighter `Permissions-Policy`.
+- Better Auth 1.7.25, Next.js 16.4.6, React 19.3.1. `pnpm audit` reports no known vulnerabilities.
+
+### Performance
+- Sign-in pages ship 72 KB less JavaScript: form validation uses `zod/mini` (the full build brought error messages in dozens of languages).
+- One self-hosted Latin font (33 KB) in place of two families; CSS inlined; the sign-in popup and the 2FA QR code load on demand.
+- Sign-in, sign-up and 2FA forms are in the prerendered HTML.
+- Lighthouse mobile, 1.0.0 → 1.1.0: home 78 → 99, privacy 92 → 97, sign-in 85 → 94, sign-up 90 → 98.
+
+### CI
+- CodeQL on every pull request and weekly; a dependency audit that covers build tools too.
+- Actions pinned to commits, a read-only token, timeouts, cached Playwright browsers, Dependabot.
+- 65 browser tests (was 33) and 41 unit tests (was 33).
+
 ## 1.0.0 (2026-11-10)
 
 The first stable release: a reusable auth starter for Next.js with a live demo at [getauthforge.vercel.app](https://getauthforge.vercel.app).

@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "@/lib/auth-errors";
+import { toastAuthError } from "@/lib/toast-auth-error";
 
 type Passkey = { id: string; name: string | null; createdAt: string | null; deviceType: string; backedUp: boolean };
 
@@ -36,7 +36,7 @@ export function PasskeysSection({ passkeys }: { passkeys: Passkey[] }) {
     setPending("add");
     const res = await authClient.passkey.addPasskey({ name });
     setPending(null);
-    if (res?.error) return toast.error(authErrorMessage(res.error, "Passkey setup was cancelled."));
+    if (res?.error) return toastAuthError(res.error, "Passkey setup was cancelled.");
     toast.success("Passkey added");
     setAdding(false);
     router.refresh();
@@ -46,7 +46,7 @@ export function PasskeysSection({ passkeys }: { passkeys: Passkey[] }) {
     setPending(id);
     const res = await authClient.passkey.deletePasskey({ id });
     setPending(null);
-    if (res.error) return toast.error(authErrorMessage(res.error));
+    if (res.error) return toastAuthError(res.error);
     toast.success("Passkey removed");
     router.refresh();
   }

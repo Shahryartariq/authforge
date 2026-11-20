@@ -13,7 +13,7 @@ import { FormAlert } from "@/components/form-alert";
 import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { useQueryParams } from "@/lib/use-query-params";
-import { safeRedirect } from "@/lib/utils";
+import { safeRedirect, signInHref } from "@/lib/utils";
 import { otpSchema } from "@/lib/validation";
 
 export function TwoFactorForm() {
@@ -75,7 +75,8 @@ export function TwoFactorForm() {
             autoFocus
             autoComplete="one-time-code"
             inputMode={mode === "totp" ? "numeric" : "text"}
-            maxLength={mode === "totp" ? 6 : 32}
+            // One more than the code, so "123 456" can be pasted as apps show it.
+            maxLength={mode === "totp" ? 7 : 32}
             placeholder={mode === "totp" ? "123456" : "xxxxx-xxxxx"}
             className="font-mono tracking-[0.3em]"
           />
@@ -102,7 +103,7 @@ export function TwoFactorForm() {
         >
           {mode === "totp" ? "Use a backup code" : "Use your authenticator app"}
         </button>
-        <Link href="/sign-in" className="text-muted-foreground hover:text-foreground">
+        <Link href={signInHref(callbackURL)} className="text-muted-foreground hover:text-foreground">
           Cancel
         </Link>
       </div>

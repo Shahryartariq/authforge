@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { FormAlert } from "@/components/form-alert";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "@/lib/auth-errors";
+import { toastAuthError } from "@/lib/toast-auth-error";
 
 export function DeleteAccount({ hasPassword, emailDelivery }: { hasPassword: boolean; emailDelivery: boolean }) {
   const router = useRouter();
@@ -26,12 +26,13 @@ export function DeleteAccount({ hasPassword, emailDelivery }: { hasPassword: boo
     setPending(true);
     const res = await authClient.deleteUser({
       ...(hasPassword ? { password } : {}),
-      callbackURL: "/",
+      // Where the emailed confirmation link lands, with a "deleted" notice.
+      callbackURL: "/?notice=account-deleted",
     });
     setPending(false);
     if (res.error) {
       if (res.error.code === "INVALID_PASSWORD") return setError("That password isn't right");
-      return toast.error(authErrorMessage(res.error));
+      return toastAuthError(res.error);
     }
     if (!emailDelivery) {
       // No email confirmation on this deployment: the account is already gone.

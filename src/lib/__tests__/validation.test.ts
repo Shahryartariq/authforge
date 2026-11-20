@@ -16,8 +16,18 @@ describe("safeRedirect", () => {
   it("allows same-site paths", () => {
     expect(safeRedirect("/settings?tab=security")).toBe("/settings?tab=security");
   });
+  it("keeps the query string and hash", () => {
+    expect(safeRedirect("/admin?q=a%20b&page=2#top")).toBe("/admin?q=a%20b&page=2#top");
+  });
   it.each(["//evil.com", "https://evil.com", "/\\evil.com", "javascript:alert(1)", "", null, undefined])(
     "blocks %s",
+    (value) => {
+      expect(safeRedirect(value)).toBe("/dashboard");
+    },
+  );
+  // Browsers remove tabs and newlines from URLs, which turns these into "//evil.com".
+  it.each(["/\t/evil.com", "/\n/evil.com", "/\r/evil.com", "/\t\n/evil.com", "/ok\\..\\//evil.com", "/\u0000/evil.com", " /evil"])(
+    "blocks a path that a browser would read as another site: %j",
     (value) => {
       expect(safeRedirect(value)).toBe("/dashboard");
     },

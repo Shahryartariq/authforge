@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import QRCode from "react-qr-code";
+import dynamic from "next/dynamic";
 import { Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/auth/password-input";
@@ -16,6 +16,12 @@ import { authClient } from "@/lib/auth-client";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { site } from "@/lib/site";
 import { otpSchema } from "@/lib/validation";
+
+// Only needed while setting up 2FA, so it isn't part of every Settings visit.
+const QRCode = dynamic(() => import("react-qr-code"), {
+  ssr: false,
+  loading: () => <div className="size-[164px] animate-pulse rounded bg-neutral-200" aria-label="Loading QR code" />,
+});
 
 type Step =
   | { kind: "idle" }
@@ -62,7 +68,8 @@ export function TwoFactorSection({ enabled, hasPassword }: { enabled: boolean; h
   async function verify(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (step.kind !== "scan") return;
-    const parsed = otpSchema.safeParse(new FormData(e.currentTarget).get("code"));
+    const typed = String(new FormData(e.currentTarget).get("code") ?? "").replace(/\s/g, "");
+    const parsed = otpSchema.safeParse(typed);
     if (!parsed.success) return setError(parsed.error.issues[0].message);
     setError("");
     setPending(true);
@@ -151,7 +158,7 @@ export function TwoFactorSection({ enabled, hasPassword }: { enabled: boolean; h
                 </div>
               </div>
               <Field label="6-digit code" htmlFor="tfa-code" error={error}>
-                <Input id="tfa-code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} className="max-w-40 font-mono tracking-[0.3em]" autoFocus />
+                <Input id="tfa-code" name="code" inputMode="numeric" autoComplete="one-time-code" maxLength={7} className="max-w-40 font-mono tracking-[0.3em]" autoFocus />
               </Field>
             </div>
           </div>

@@ -8,7 +8,7 @@ import { Section } from "@/components/settings/section";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "@/lib/auth-errors";
+import { toastAuthError } from "@/lib/toast-auth-error";
 import { changePasswordSchema, fieldErrors } from "@/lib/validation";
 
 export function PasswordSection({
@@ -40,7 +40,7 @@ export function PasswordSection({
               setPending(true);
               const res = await authClient.requestPasswordReset({ email, redirectTo: "/reset-password" });
               setPending(false);
-              if (res.error) return toast.error(authErrorMessage(res.error));
+              if (res.error) return toastAuthError(res.error);
               toast.success(`We sent a link to ${email} to set your password.`);
             }}
           >
@@ -66,7 +66,7 @@ export function PasswordSection({
     setPending(false);
     if (res.error) {
       if (res.error.code === "INVALID_PASSWORD") return setErrors({ currentPassword: "That password isn't right" });
-      return toast.error(authErrorMessage(res.error));
+      return toastAuthError(res.error);
     }
     form.reset();
     toast.success("Password changed. Other devices were signed out.");

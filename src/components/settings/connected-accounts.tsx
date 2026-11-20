@@ -8,7 +8,10 @@ import { Section } from "@/components/settings/section";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { authClient } from "@/lib/auth-client";
-import { authErrorMessage } from "@/lib/auth-errors";
+import { oauthErrorMessage } from "@/lib/auth-errors";
+import { toastAuthError } from "@/lib/toast-auth-error";
+import { useQueryParams } from "@/lib/use-query-params";
+import { FormAlert } from "@/components/form-alert";
 import type { EnabledProviders } from "@/lib/env";
 
 const PROVIDERS = [
@@ -24,6 +27,11 @@ export function ConnectedAccounts({
   linked: { providerId: string; id: string }[];
 }) {
   const router = useRouter();
+  const params = useQueryParams();
+  const linkError =
+    params.get("link") === "failed"
+      ? oauthErrorMessage(params.get("error") ?? "unknown", "That account couldn't be connected. Please try again.")
+      : "";
   const [pending, setPending] = useState<string | null>(null);
   const available = PROVIDERS.filter((p) => enabled[p.id]);
   const methodCount = linked.length;
@@ -39,10 +47,15 @@ export function ConnectedAccounts({
 
   async function link(provider: (typeof PROVIDERS)[number]["id"]) {
     setPending(provider);
-    const res = await authClient.linkSocial({ provider, callbackURL: "/settings" });
+    const res = await authClient.linkSocial({
+      provider,
+      callbackURL: "/settings",
+      // A refused link (for example, a different email) comes back here with ?error=.
+      errorCallbackURL: "/settings?link=failed",
+    });
     if (res.error) {
       setPending(null);
-      toast.error(authErrorMessage(res.error));
+      toastAuthError(res.error);
     }
   }
 
@@ -50,7 +63,7 @@ export function ConnectedAccounts({
     setPending(providerId);
     const res = await authClient.unlinkAccount({ accountId });
     setPending(null);
-    if (res.error) return toast.error(authErrorMessage(res.error));
+    if (res.error) return toastAuthError(res.error);
     toast.success("Account disconnected");
     router.refresh();
   }
@@ -58,6 +71,7 @@ export function ConnectedAccounts({
   return (
     <Section title="Connected accounts" description="Sign in with these accounts as well as your email.">
       <div className="flex flex-col gap-3">
+        {linkError && <FormAlert>{linkError}</FormAlert>}
         {available.map(({ id, label, Icon }) => {
           const account = linked.find((l) => l.providerId === id);
           return (

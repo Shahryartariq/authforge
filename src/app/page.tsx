@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Fingerprint, KeyRound, Mail, ShieldCheck, Users, Zap } from "lucide-react";
 import { GitHubIcon, GoogleIcon, Logo } from "@/components/icons";
@@ -5,8 +6,13 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SignInButton } from "@/components/auth/sign-in-button";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { baseURL, providers } from "@/lib/env";
-import { site } from "@/lib/site";
+import { openGraphBase, site } from "@/lib/site";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+  openGraph: { ...openGraphBase, title: site.title, description: site.description, url: "/" },
+};
 
 const features = [
   {

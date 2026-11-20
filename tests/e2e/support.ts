@@ -84,6 +84,27 @@ export async function emailLink(to: string, kind: keyof typeof LINKS) {
   return link!;
 }
 
+/** Waits for the newest email to `to` whose subject matches, and returns its text. */
+export async function emailText(to: string, subject: RegExp) {
+  let text: string | undefined;
+  await expect
+    .poll(
+      () => {
+        if (!existsSync(OUTBOX)) return undefined;
+        text = readFileSync(OUTBOX, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((line) => JSON.parse(line) as { to: string; subject: string; text: string })
+          .filter((e) => e.to === to && subject.test(e.subject))
+          .pop()?.text;
+        return text;
+      },
+      { message: `email "${subject.source}" for ${to}`, timeout: 15_000 },
+    )
+    .toBeTruthy();
+  return text!;
+}
+
 // ---------------------------------------------------------------- flows
 
 export async function fillSignUp(page: Page, name: string, email: string, password = PASSWORD) {
@@ -132,6 +153,17 @@ export async function sessionStatus(page: Page) {
 /** Gives a user the admin role with the project's own script. */
 export function promoteToAdmin(email: string) {
   execFileSync("pnpm", ["exec", "tsx", "scripts/promote-admin.ts", email], {
+    stdio: "pipe",
+    shell: process.platform === "win32",
+  });
+}
+
+/**
+ * Makes a user's sessions look `days` old, as if they had stayed signed in.
+ * (Some actions only work for a day after signing in.)
+ */
+export function ageSessions(email: string, days: number) {
+  execFileSync("pnpm", ["exec", "tsx", "tests/e2e/age-sessions.ts", email, String(days)], {
     stdio: "pipe",
     shell: process.platform === "win32",
   });
